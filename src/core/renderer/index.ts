@@ -24,6 +24,7 @@ class Renderer {
   public render(ast: JSXElement, container: HTMLElement) {
     this._ast = transformAst(ast);
     // 执行挂载函数，
+
     this.mount(this._ast, container)
 
     // 添加更新函数
@@ -35,6 +36,7 @@ class Renderer {
           scheduleUpdated = false;
 
           hookIndex = 0;
+
           compareVirtualDOM(container, this._ast, this._ast)
         })
       }
@@ -44,7 +46,6 @@ class Renderer {
   public mount(ast: RenderAst, container: HTMLElement) {
     let element = this.createElementDOM(ast)!
 
-    console.log('this.ast', this._ast, this.alternateMap)
     container.appendChild(element)
   }
 
@@ -54,21 +55,35 @@ class Renderer {
     let dom;
     
     if(type === RenderTagType.Text) {
-      dom = document.createTextNode(ast.props.text)
+      dom = document.createTextNode(ast.props.text.text)
+
+      ast.props.text.el = dom
+      ast.$el = ast.props.text.el
+
     }else if(type === RenderTagType.FuntionComponent) {
       dom = this.mountFunctionComponent((ast as FunctionComponentAst))
+      ast.$el = dom;
 
     }else {
       dom = document.createElement((ast.tag as string))
+      ast.$el = dom;
+
     }
 
-    ast.$el = dom;
 
     if(props) {
       updateProps(dom, {}, props)
-      let children = Array.isArray(props.children) ? props.children : [props.children]
 
-      this.reconcileChildren(children, (dom as HTMLElement))
+      if(props.children) {
+        let children = Array.isArray(props.children) ? props.children : [props.children]
+
+        props.children = children = children.map(item => transformAst(item))
+
+        const res = this.reconcileChildren(children, (dom as HTMLElement))
+
+        console.log('reconcileChildren', res)
+      }
+      
     }
 
 
@@ -89,28 +104,41 @@ class Renderer {
     ast.id = this._id+1
     ast.alternate = renderVitrualDOM
 
-    debugger
+    
     return this.createElementDOM(renderVitrualDOM)
   }
 
-  public reconcileChildren(children: Array<JSXElement>, parentElement: HTMLElement) {
-    if(!children || children.length <= 0) {
-      return 
-    }
+  public reconcileChildren(children: Array<any>, parentElement: HTMLElement) {
+
     for(let index = 0; index < children.length; index ++) {
 
       if(!children[index]) {
         continue
       }
-      this.mount(transformAst(children[index]) , parentElement)
+
+      this.mount(children[index], parentElement)
     }
+
+    return children
   }
+}
+
+
+class TextNode {
+  public el?: Text;
+  public text: string = ''
+
+  constructor(text: string, dom?: Text) {
+    this.text = text
+    this.el = dom
+  }
+
 }
 
 const renderer = new Renderer()
 
 
-function transformAst(vitrualDOM: JSXElement): RenderAst {
+function transformAst(vitrualDOM: JSXElement | any): RenderAst {
   let renderAst: RenderAst = {
     tag: '',
     type: RenderTagType.NativeTag,
@@ -122,9 +150,12 @@ function transformAst(vitrualDOM: JSXElement): RenderAst {
       tag: 'text',
       type: RenderTagType.Text,
       props: { 
-        text: vitrualDOM
+        text: new TextNode(vitrualDOM) 
       }
     }
+  }else if(vitrualDOM.tag === 'text') {
+    return vitrualDOM
+
   }else {
     let tagType = typeof vitrualDOM.type;
 
@@ -148,7 +179,7 @@ function transformAst(vitrualDOM: JSXElement): RenderAst {
 
 function updateProps(element: any, oldProps: CompositeObject, newProps: CompositeObject) {
   for(let key in newProps) {
-    if(key === 'children') {
+    if(key === 'children' || key === 'text') {
       continue
     }else if(key === 'style') {
       let styleObj = newProps[key];
@@ -192,8 +223,9 @@ function updateElement(oldVdom: RenderAst, newVdom: RenderAst) {
     updateFunctionComponent((oldVdom as FunctionComponentAst), (newVdom as FunctionComponentAst))
   }else if(oldVdom.type === RenderTagType.Text) {
     let currentDOM = newVdom.$el = findDOM(oldVdom);
+     
     if (oldVdom.props.text !== newVdom.props.text) {
-      currentDOM.textContent = newVdom.props.text;
+      currentDOM.textContent = newVdom.props.text.text;
     }
   }else if(oldVdom.type === RenderTagType.NativeTag){
     let currentDOM = newVdom.$el = findDOM(oldVdom);
@@ -237,7 +269,10 @@ function findDOM(vdom: RenderAst): any {
 
   if(vdom.$el) {
     return vdom.$el
-  }else {
+  }else if(vdom.type === RenderTagType.Text) {
+    return vdom.props.test.el
+  }
+  else {
     let renderVdom = vdom.alternate
 
     return findDOM(renderVdom!)
@@ -343,7 +378,9 @@ function updateChildren(parentDOM: HTMLElement, oldVirtualChild: any[], newVirtu
 
 
   function setState(newState: any) {
-    hookStates[currentIndex] = newState;
+    if(hookStates[currentIndex] !== newState) {
+      hookStates[currentIndex] = newState;
+    }
     // 开始更新
     scheduleUpdate()
   }

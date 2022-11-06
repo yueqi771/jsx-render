@@ -37,7 +37,7 @@ export interface FunctionComponentAst extends RenderAst{
 }
 
 export enum RenderTagType {
-  FuntionComponent,
-  Text,
-  NativeTag
+  FuntionComponent = "FUNCIONTCOMPONENT",
+  Text = "TEXT",
+  NativeTag = "NATIVETAG"
 }
